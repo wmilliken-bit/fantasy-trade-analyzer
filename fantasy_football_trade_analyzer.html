@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Football Trade Analyzer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#111827',
+                            900: '#0f172a',
+                            950: '#020617',
+                        },
+                        emerald: {
+                            400: '#34d399',
+                            500: '#10b981',
+                        },
+                        cyan: {
+                            400: '#22d3ee',
+                            500: '#06b6d4',
+                        },
+                        amber: {
+                            400: '#fbbf24',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        /* Glassmorphism effects */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .glow-emerald {
+            box-shadow: 0 0 20px -5px rgba(16, 185, 129, 0.3);
+        }
+        .glow-cyan {
+            box-shadow: 0 0 20px -5px rgba(6, 182, 212, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-cyan-500 selection:text-slate-950">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 ease-out flex items-center gap-3 bg-slate-800 text-slate-100 px-4 py-3 rounded-xl border border-slate-700 shadow-2xl">
+        <i id="toast-icon" data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
+        <span id="toast-message" class="text-sm font-medium">Notification message</span>
+    </div>
+
+    <!-- Header / Navbar -->
+    <header class="border-b border-slate-800/80 bg-slate-900/80 sticky top-0 z-40 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-cyan-500/20">
+                    <i data-lucide="repeat" class="w-6 h-6 stroke-[2.5]"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                        GRIDIRON <span class="text-cyan-400">PULSE PRO</span>
+                    </h1>
+                    <p class="text-xs text-slate-400 font-medium">Ultimate Dynasty & Redraft Trade Engine</p>
+                </div>
+            </div>
+
+            <!-- Top Actions -->
+            <div class="flex items-center gap-2 sm:gap-4">
+                <!-- Preset Trade Dropdown -->
+                <div class="relative">
+                    <select id="preset-selector" onchange="loadPresetTrade(this.value)" class="bg-slate-800 border border-slate-700 text-xs sm:text-sm text-slate-200 rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-cyan-500 focus:outline-none cursor-pointer hover:bg-slate-750 transition-colors">
+                        <option value="" disabled selected>⚡ Preset Trades...</option>
+                        <option value="blockbuster">Blockbuster Star Deal (Jefferson for Gibbs+)</option>
+                        <option value="dynasty_rebuild">Dynasty Rebuild (Veteran for Picks)</option>
+                        <option value="superflex_qb">Superflex Elite QB Trade</option>
+                        <option value="tight_end_premium">TE Premium Blockbuster</option>
+                        <option value="rookie_fever">Rookie Draft Pick Swap</option>
+                    </select>
+                </div>
+
+                <button onclick="resetTrade()" class="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors" title="Reset Trade">
+                    <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- League Settings Toolbar Bar -->
+        <section class="glass-panel rounded-2xl p-4 sm:p-5 shadow-xl">
+            <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-4 h-4 text-cyan-400"></i> League Settings & Format
+                </h2>
+                <span class="text-xs text-slate-500 italic">Values automatically recalculate on change</span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+                <!-- Format Mode -->
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs text-slate-400 font-medium">Format</label>
+                    <select id="setting-format" onchange="updateSettings()" class="bg-slate-900 border border-slate-700 text-xs sm:text-sm text-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+                        <option value="dynasty" selected>Dynasty (Keeptradecut style)</option>
+                        <option value="redraft">Redraft (Current Season)</option>
+                    </select>
+                </div>
+
+                <!-- QB Format -->
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs text-slate-400 font-medium">QB Slot</label>
+                    <select id="setting-qb-format" onchange="updateSettings()" class="bg-slate-900 border border-slate-700 text-xs sm:text-sm text-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+                        <option value="superflex" selected>Superflex / 2QB (+QB Value)</option>
+                        <option value="single_qb">1 QB Standard</option>
+                    </select>
+                </div>
+
+                <!-- Scoring Rules -->
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs text-slate-400 font-medium">Scoring</label>
+                    <select id="setting-scoring" onchange="updateSettings()" class="bg-slate-900 border border-slate-700 text-xs sm:text-sm text-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+                        <option value="ppr" selected>Full PPR</option>
+                        <option value="half_ppr font-medium">0.5 Half PPR</option>
+                        <option value="standard">Standard / Non-PPR</option>
+                        <option value="te_premium">TE Premium (+0.5 PPR TE)</option>
+                    </select>
+                </div>
+
+                <!-- League Size -->
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs text-slate-400 font-medium">League Size</label>
+                    <select id="setting-teams" onchange="updateSettings()" class="bg-slate-900 border border-slate-700 text-xs sm:text-sm text-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+                        <option value="10">10 Teams</option>
+                        <option value="12" selected>12 Teams</option>
+                        <option value="14">14 Teams</option>
+                        <option value="16">16 Teams</option>
+                    </select>
+                </div>
+
+                <!-- Starters vs Bench Premium -->
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs text-slate-400 font-medium">Stud Premium</label>
+                    <select id="setting-stud-premium" onchange="updateSettings()" class="bg-slate-900 border border-slate-700 text-xs sm:text-sm text-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+                        <option value="high" selected>High (Consolidation Boost)</option>
+                        <option value="normal">Standard Market</option>
+                        <option value="low">Low (Depth Preferred)</option>
+                    </select>
+                </div>
+
+                <!-- Preset Action/Save -->
+                <div class="flex flex-col justify-end gap-1">
+                    <button onclick="saveLeagueSettings()" class="w-full bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border border-slate-700 text-xs font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-1.5">
+                        <i data-lucide="save" class="w-3.5 h-3.5"></i> Save Default
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Trade Interface (Team A vs Team B) -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- TEAM A / GIVING COLUMN -->
+            <div class="glass-panel rounded-2xl p-5 border-t-4 border-t-cyan-500 flex flex-col justify-between shadow-2xl relative">
+                <div>
+                    <!-- Column Header -->
+                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+                        <div>
+                            <span class="text-xs font-bold text-cyan-400 uppercase tracking-widest">Side A</span>
+                            <h2 class="text-xl font-extrabold text-white">Team A Gives</h2>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-2xl font-black text-cyan-400 font-mono" id="team-a-total-val">0</div>
+                            <div class="text-xs text-slate-400">Total Trade Value</div>
+                        </div>
+                    </div>
+
+                    <!-- Add Player Button & Search Container -->
+                    <div class="mb-4 relative">
+                        <button onclick="openSearchModal('A')" class="w-full py-3 px-4 bg-slate-900/80 hover:bg-slate-800 border border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-xl text-slate-300 font-medium text-sm flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-cyan-500/10 group">
+                            <i data-lucide="plus-circle" class="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform"></i> Add Player or Draft Pick to Side A
+                        </button>
+                    </div>
+
+                    <!-- Assets List Container -->
+                    <div id="team-a-assets" class="space-y-2.5 min-h-[160px]">
+                        <!-- Dynamic items rendered here -->
+                        <div class="h-32 flex flex-col items-center justify-center text-slate-500 border border-slate-800/60 rounded-xl bg-slate-900/30">
+                            <i data-lucide="user-plus" class="w-8 h-8 mb-2 stroke-[1.5] opacity-50"></i>
+                            <span class="text-xs">No assets added to Side A yet</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column Summary Footer -->
+                <div class="mt-6 pt-3 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400">
+                    <span>Assets: <strong id="team-a-count" class="text-slate-200">0</strong></span>
+                    <span id="team-a-avg-age" class="text-slate-400 font-mono">Avg Age: -</span>
+                    <span id="team-a-top-asset" class="truncate max-w-[150px] text-right">Top: -</span>
+                </div>
+            </div>
+
+            <!-- TEAM B / RECEIVING COLUMN -->
+            <div class="glass-panel rounded-2xl p-5 border-t-4 border-t-emerald-500 flex flex-col justify-between shadow-2xl relative">
+                <div>
+                    <!-- Column Header -->
+                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+                        <div>
+                            <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">Side B</span>
+                            <h2 class="text-xl font-extrabold text-white">Team B Gives</h2>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-2xl font-black text-emerald-400 font-mono" id="team-b-total-val">0</div>
+                            <div class="text-xs text-slate-400">Total Trade Value</div>
+                        </div>
+                    </div>
+
+                    <!-- Add Player Button & Search Container -->
+                    <div class="mb-4 relative">
+                        <button onclick="openSearchModal('B')" class="w-full py-3 px-4 bg-slate-900/80 hover:bg-slate-800 border border-dashed border-emerald-500/40 hover:border-emerald-400 rounded-xl text-slate-300 font-medium text-sm flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-emerald-500/10 group">
+                            <i data-lucide="plus-circle" class="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform"></i> Add Player or Draft Pick to Side B
+                        </button>
+                    </div>
+
+                    <!-- Assets List Container -->
+                    <div id="team-b-assets" class="space-y-2.5 min-h-[160px]">
+                        <!-- Dynamic items rendered here -->
+                        <div class="h-32 flex flex-col items-center justify-center text-slate-500 border border-slate-800/60 rounded-xl bg-slate-900/30">
+                            <i data-lucide="user-plus" class="w-8 h-8 mb-2 stroke-[1.5] opacity-50"></i>
+                            <span class="text-xs">No assets added to Side B yet</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column Summary Footer -->
+                <div class="mt-6 pt-3 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400">
+                    <span>Assets: <strong id="team-b-count" class="text-slate-200">0</strong></span>
+                    <span id="team-b-avg-age" class="text-slate-400 font-mono">Avg Age: -</span>
+                    <span id="team-b-top-asset" class="truncate max-w-[150px] text-right">Top: -</span>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- TRADE ANALYSIS & BREAKDOWN SECTION -->
+        <section class="glass-panel rounded-2xl p-6 shadow-2xl space-y-6">
+            
+            <!-- Analysis Top Header & Fairness Meter -->
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6 pb-6 border-b border-slate-800">
+                <div class="w-full md:w-1/3">
+                    <div class="flex items-center gap-2 mb-1">
+                        <i data-lucide="activity" class="w-5 h-5 text-cyan-400"></i>
+                        <h3 class="text-lg font-bold text-white">Trade Fairness Meter</h3>
+                    </div>
+                    <p class="text-xs text-slate-400">Calculated using non-linear stud consolidation models, age curves & league settings.</p>
+                </div>
+
+                <!-- Meter Visual Gauge -->
+                <div class="w-full md:w-2/3 flex flex-col items-center">
+                    <div class="w-full max-w-md bg-slate-900 h-5 rounded-full p-1 relative border border-slate-800 overflow-hidden flex items-center">
+                        <div class="w-full h-full rounded-full bg-gradient-to-r from-cyan-500 via-emerald-400 to-amber-500 opacity-30"></div>
+                        <div id="fairness-needle" class="absolute top-0 bottom-0 w-3 bg-white rounded-full shadow-lg border border-slate-900 transform -translate-x-1/2 transition-all duration-500 ease-out" style="left: 50%;"></div>
+                    </div>
+                    
+                    <div class="flex justify-between w-full max-w-md text-[10px] text-slate-500 mt-1.5 font-medium px-1">
+                        <span>Favors Side A</span>
+                        <span>Fair Trade</span>
+                        <span>Favors Side B</span>
+                    </div>
+
+                    <div class="mt-3 flex items-center gap-3">
+                        <span id="verdict-badge" class="px-3 py-1 rounded-full text-xs font-black tracking-wide bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase">
+                            EVEN TRADE
+                        </span>
+                        <span id="verdict-delta" class="text-sm font-semibold font-mono text-slate-300">
+                            Difference: 0 pts (0%)
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Breakdown Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                
+                <!-- Card 1: AI Insight & Strategic Summary -->
+                <div class="glass-card rounded-xl p-4 border border-slate-800/80 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <i data-lucide="brain-circuit" class="w-4 h-4"></i> Strategic AI Breakdown
+                            </span>
+                            <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-mono">Real-time</span>
+                        </div>
+                        <p id="analysis-text" class="text-xs text-slate-300 leading-relaxed space-y-2">
+                            Add players or picks to both sides of the trade to generate a full analysis.
+                        </p>
+                    </div>
+
+                    <div id="consolidation-warning" class="mt-4 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2 hidden">
+                        <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+                        <span id="consolidation-text">2-for-1 Trade: Side receiving extra players will need roster cuts.</span>
+                    </div>
+                </div>
+
+                <!-- Card 2: Positional Value Impact Chart -->
+                <div class="glass-card rounded-xl p-4 border border-slate-800/80 flex flex-col">
+                    <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Positional Distribution
+                    </span>
+                    <div class="relative flex-1 min-h-[160px] flex items-center justify-center">
+                        <canvas id="positionChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Card 3: Dynasty Longevity & Summary Export -->
+                <div class="glass-card rounded-xl p-4 border border-slate-800/80 flex flex-col justify-between md:col-span-2 lg:col-span-1">
+                    <div>
+                        <span class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                            <i data-lucide="clock" class="w-4 h-4"></i> Dynasty Longevity & Export
+                        </span>
+                        
+                        <div class="space-y-2 text-xs mb-4">
+                            <div class="flex justify-between py-1 border-b border-slate-800">
+                                <span class="text-slate-400">Side A Avg Age:</span>
+                                <span id="summary-a-age" class="font-semibold font-mono text-slate-200">-</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-800">
+                                <span class="text-slate-400">Side B Avg Age:</span>
+                                <span id="summary-b-age" class="font-semibold font-mono text-slate-200">-</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-800">
+                                <span class="text-slate-400">Projected Elite Years:</span>
+                                <span id="summary-elite-years" class="font-semibold text-cyan-300">-</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-800">
+                                <span class="text-slate-400">Format Boost Applied:</span>
+                                <span id="summary-format-boost" class="font-semibold text-slate-200">Dynasty SF</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="copyTradeMarkdown()" class="flex-1 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-xs py-2.5 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-1.5">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy Summary
+                        </button>
+                        <button onclick="saveTradeHistory()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs py-2.5 px-3 rounded-lg border border-slate-700 transition-colors flex items-center justify-center gap-1.5" title="Save to History">
+                            <i data-lucide="bookmark" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Saved Trades / History Drawer -->
+        <section class="glass-panel rounded-2xl p-5 shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <i data-lucide="history" class="w-4 h-4 text-cyan-400"></i> Saved Trade History
+                </h3>
+                <button onclick="clearTradeHistory()" class="text-xs text-slate-500 hover:text-rose-400 transition-colors">Clear History</button>
+            </div>
+            
+            <div id="trade-history-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div class="text-xs text-slate-500 italic col-span-full py-4 text-center">No saved trades in local storage yet.</div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- SEARCH & SELECTION MODAL -->
+    <div id="search-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-200">
+        <div class="glass-panel w-full max-w-xl rounded-2xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            
+            <!-- Modal Header -->
+            <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+                <div class="flex items-center gap-2">
+                    <span id="modal-side-tag" class="text-xs font-extrabold uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400">SIDE A</span>
+                    <h3 class="font-bold text-white text-base">Select Player or Draft Pick</h3>
+                </div>
+                <button onclick="closeSearchModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Tabs: Preset Players / Draft Picks / Custom Entry -->
+            <div class="flex border-b border-slate-800 bg-slate-900/30 text-xs font-semibold">
+                <button id="tab-players-btn" onclick="switchModalTab('players')" class="flex-1 py-3 px-4 text-cyan-400 border-b-2 border-cyan-400 transition-colors flex items-center justify-center gap-1.5">
+                    <i data-lucide="users" class="w-3.5 h-3.5"></i> Players Database
+                </button>
+                <button id="tab-picks-btn" onclick="switchModalTab('picks')" class="flex-1 py-3 px-4 text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center gap-1.5">
+                    <i data-lucide="disc" class="w-3.5 h-3.5"></i> Draft Picks
+                </button>
+                <button id="tab-custom-btn" onclick="switchModalTab('custom')" class="flex-1 py-3 px-4 text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center gap-1.5">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Custom Entry
+                </button>
+            </div>
+
+            <!-- TAB 1: PLAYER DATABASE -->
+            <div id="modal-tab-players" class="p-4 flex-1 flex flex-col min-h-0 space-y-3">
+                <!-- Search & Filters -->
+                <div class="space-y-2">
+                    <div class="relative">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                        <input type="text" id="player-search-input" oninput="filterPlayers()" placeholder="Search player name, team..." class="w-full bg-slate-900 border border-slate-700 text-sm rounded-xl pl-9 pr-4 py-2 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    </div>
+                    <!-- Position Filter Chips -->
+                    <div class="flex flex-wrap gap-1.5 text-xs">
+                        <button onclick="setPosFilter('ALL')" class="pos-filter-btn px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-bold" data-pos="ALL">ALL</button>
+                        <button onclick="setPosFilter('QB')" class="pos-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium hover:bg-slate-700" data-pos="QB">QB</button>
+                        <button onclick="setPosFilter('RB')" class="pos-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium hover:bg-slate-700" data-pos="RB">RB</button>
+                        <button onclick="setPosFilter('WR')" class="pos-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium hover:bg-slate-700" data-pos="WR">WR</button>
+                        <button onclick="setPosFilter('TE')" class="pos-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium hover:bg-slate-700" data-pos="TE">TE</button>
+                        <button onclick="setPosFilter('K')" class="pos-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium hover:bg-slate-700" data-pos="K">K</button>
+                        <button onclick="setPosFilter('DST')" class="pos-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium hover:bg-slate-700" data-pos="DST">DST</button>
+                    </div>
+                </div>
+
+                <!-- Players Scrollable List -->
+                <div id="modal-player-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-800/40">
+                    <!-- Dynamic rendering -->
+                </div>
+            </div>
+
+            <!-- TAB 2: DRAFT PICKS -->
+            <div id="modal-tab-picks" class="p-4 flex-1 overflow-y-auto space-y-4 hidden">
+                <p class="text-xs text-slate-400">Select future draft picks (values reflect projected pick positioning):</p>
+                <div id="modal-picks-grid" class="grid grid-cols-2 gap-2.5">
+                    <!-- Dynamic rendering -->
+                </div>
+            </div>
+
+            <!-- TAB 3: CUSTOM ENTRY -->
+        <div id="modal-tab-custom" class="p-4 flex-1 space-y-4 hidden">
+            <p class="text-xs text-slate-400">Add a custom player or unlisted asset manually:</p>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-slate-400 font-medium block mb-1">Player / Asset Name</label>
+                    <input type="text" id="custom-name" placeholder="e.g. Sleeper Rookie Sleeper" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-slate-400 font-medium block mb-1">Position</label>
+                        <select id="custom-pos" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <option value="WR">WR</option>
+                            <option value="RB">RB</option>
+                            <option value="QB">QB</option>
+                            <option value="TE">TE</option>
+                            <option value="K">K</option>
+                            <option value="DST">DST</option>
+                            <option value="PICK">PICK</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 font-medium block mb-1">NFL Team (Opt)</label>
+                        <input type="text" id="custom-team" placeholder="e.g. FA or KC" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-medium block mb-1">Base Trade Value (0 - 9999)</label>
+                    <input type="number" id="custom-value" value="3500" min="1" max="9999" class="w-full bg-slate-900 border border-slate-700 text-sm rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                </div>
+                <button onclick="addCustomAsset()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm py-2.5 rounded-xl transition-colors">
+                    Add Custom Asset
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Application JavaScript Engine -->
+<script>
+    /* ==========================================================================
+       MASSIVE ESPN/SLEEPER STYLE PLAYER DATABASE (150+ NFL PLAYERS + DRAFT PICKS)
+       ========================================================================== */
+    const PLAYERS_DATABASE = [
+        // --- QUARTERBACKS (QB) ---
+        { id: 'qb1', name: 'Josh Allen', pos: 'QB', team: 'BUF', baseDynasty: 9500, baseRedraft: 9400, age: 28 },
+        { id: 'qb2', name: 'Patrick Mahomes', pos: 'QB', team: 'KC', baseDynasty: 9400, baseRedraft: 9100, age: 29 },
+        { id: 'qb3', name: 'Lamar Jackson', pos: 'QB', team: 'BAL', baseDynasty: 9300, baseRedraft: 9300, age: 27 },
+        { id: 'qb4', name: 'C.J. Stroud', pos: 'QB', team: 'HOU', baseDynasty: 8900, baseRedraft: 8000, age: 23 },
+        { id: 'qb5', name: 'Jalen Hurts', pos: 'QB', team: 'PHI', baseDynasty: 8850, baseRedraft: 8800, age: 26 },
+        { id: 'qb6', name: 'Joe Burrow', pos: 'QB', team: 'CIN', baseDynasty: 8600, baseRedraft: 8300, age: 27 },
+        { id: 'qb7', name: 'Jayden Daniels', pos: 'QB', team: 'WAS', baseDynasty: 8550, baseRedraft: 8200, age: 23 },
+        { id: 'qb8', name: 'Jordan Love', pos: 'QB', team: 'GB', baseDynasty: 7800, baseRedraft: 7600, age: 25 },
+        { id: 'qb9', name: 'Brock Purdy', pos: 'QB', team: 'SF', baseDynasty: 7400, baseRedraft: 7500, age: 24 },
+        { id: 'qb10', name: 'Kyler Murray', pos: 'QB', team: 'ARI', baseDynasty: 7300, baseRedraft: 7700, age: 27 },
+        { id: 'qb11', name: 'Caleb Williams', pos: 'QB', team: 'CHI', baseDynasty: 7600, baseRedraft: 6900, age: 22 },
+        { id: 'qb12', name: 'Anthony Richardson', pos: 'QB', team: 'IND', baseDynasty: 7200, baseRedraft: 7000, age: 22 },
+        { id: 'qb13', name: 'Dak Prescott', pos: 'QB', team: 'DAL', baseDynasty: 6800, baseRedraft: 7800, age: 31 },
+        { id: 'qb14', name: 'Trevor Lawrence', pos: 'QB', team: 'JAX', baseDynasty: 6700, baseRedraft: 6600, age: 25 },
+        { id: 'qb15', name: 'Justin Herbert', pos: 'QB', team: 'LAC', baseDynasty: 7100, baseRedraft: 7200, age: 26 },
+        { id: 'qb16', name: 'Tua Tagovailoa', pos: 'QB', team: 'MIA', baseDynasty: 6300, baseRedraft: 7000, age: 26 },
+        { id: 'qb17', name: 'Drake Maye', pos: 'QB', team: 'NE', baseDynasty: 6500, baseRedraft: 5600, age: 22 },
+        { id: 'qb18', name: 'J.J. McCarthy', pos: 'QB', team: 'MIN', baseDynasty: 6100, baseRedraft: 5100, age: 21 },
+        { id: 'qb19', name: 'Bo Nix', pos: 'QB', team: 'DEN', baseDynasty: 6000, baseRedraft: 5800, age: 24 },
+        { id: 'qb20', name: 'Baker Mayfield', pos: 'QB', team: 'TB', baseDynasty: 5700, baseRedraft: 6500, age: 29 },
+        { id: 'qb21', name: 'Jared Goff', pos: 'QB', team: 'DET', baseDynasty: 6200, baseRedraft: 7100, age: 29 },
+        { id: 'qb22', name: 'Matthew Stafford', pos: 'QB', team: 'LAR', baseDynasty: 4800, baseRedraft: 6400, age: 36 },
+        { id: 'qb23', name: 'Kirk Cousins', pos: 'QB', team: 'ATL', baseDynasty: 4500, baseRedraft: 6100, age: 36 },
+        { id: 'qb24', name: 'Aaron Rodgers', pos: 'QB', team: 'NYJ', baseDynasty: 3800, baseRedraft: 5800, age: 40 },
+        { id: 'qb25', name: 'Geno Smith', pos: 'QB', team: 'SEA', baseDynasty: 4200, baseRedraft: 5600, age: 33 },
+        { id: 'qb26', name: 'Bryce Young', pos: 'QB', team: 'CAR', baseDynasty: 5100, baseRedraft: 4500, age: 23 },
+        { id: 'qb27', name: 'Will Levis', pos: 'QB', team: 'TEN', baseDynasty: 4600, baseRedraft: 4300, age: 25 },
+        { id: 'qb28', name: 'Michael Penix Jr.', pos: 'QB', team: 'ATL', baseDynasty: 5300, baseRedraft: 3800, age: 24 },
+        { id: 'qb29', name: 'Russell Wilson', pos: 'QB', team: 'PIT', baseDynasty: 3200, baseRedraft: 4900, age: 35 },
+        { id: 'qb30', name: 'Deshaun Watson', pos: 'QB', team: 'CLE', baseDynasty: 3500, baseRedraft: 4200, age: 29 },
+
+        // --- RUNNING BACKS (RB) ---
+        { id: 'rb1', name: 'Bijan Robinson', pos: 'RB', team: 'ATL', baseDynasty: 9400, baseRedraft: 9200, age: 22 },
+        { id: 'rb2', name: 'Breece Hall', pos: 'RB', team: 'NYJ', baseDynasty: 9200, baseRedraft: 9000, age: 23 },
+        { id: 'rb3', name: 'Jahmyr Gibbs', pos: 'RB', team: 'DET', baseDynasty: 9100, baseRedraft: 8800, age: 22 },
+        { id: 'rb4', name: 'Saquon Barkley', pos: 'RB', team: 'PHI', baseDynasty: 8500, baseRedraft: 9500, age: 27 },
+        { id: 'rb5', name: 'Christian McCaffrey', pos: 'RB', team: 'SF', baseDynasty: 8000, baseRedraft: 9600, age: 28 },
+        { id: 'rb6', name: 'Jonathan Taylor', pos: 'RB', team: 'IND', baseDynasty: 7900, baseRedraft: 8600, age: 25 },
+        { id: 'rb7', name: 'Kyren Williams', pos: 'RB', team: 'LAR', baseDynasty: 7700, baseRedraft: 8500, age: 24 },
+        { id: 'rb8', name: 'De\'Von Achane', pos: 'RB', team: 'MIA', baseDynasty: 7600, baseRedraft: 8100, age: 22 },
+        { id: 'rb9', name: 'Kenneth Walker III', pos: 'RB', team: 'SEA', baseDynasty: 7200, baseRedraft: 7500, age: 23 },
+        { id: 'rb10', name: 'Derrick Henry', pos: 'RB', team: 'BAL', baseDynasty: 6500, baseRedraft: 8900, age: 30 },
+        { id: 'rb11', name: 'Josh Jacobs', pos: 'RB', team: 'GB', baseDynasty: 7100, baseRedraft: 8200, age: 26 },
+        { id: 'rb12', name: 'Travis Etienne Jr.', pos: 'RB', team: 'JAX', baseDynasty: 6800, baseRedraft: 7400, age: 25 },
+        { id: 'rb13', name: 'Isiah Pacheco', pos: 'RB', team: 'KC', baseDynasty: 6700, baseRedraft: 7600, age: 25 },
+        { id: 'rb14', name: 'James Cook', pos: 'RB', team: 'BUF', baseDynasty: 6900, baseRedraft: 7700, age: 25 },
+        { id: 'rb15', name: 'Joe Mixon', pos: 'RB', team: 'HOU', baseDynasty: 5800, baseRedraft: 7900, age: 28 },
+        { id: 'rb16', name: 'Alvin Kamara', pos: 'RB', team: 'NO', baseDynasty: 5500, baseRedraft: 8000, age: 29 },
+        { id: 'rb17', name: 'Rhamondre Stevenson', pos: 'RB', team: 'NE', baseDynasty: 5900, baseRedraft: 6800, age: 26 },
+        { id: 'rb18', name: 'D\'Andre Swift', pos: 'RB', team: 'CHI', baseDynasty: 5800, baseRedraft: 6700, age: 25 },
+        { id: 'rb19', name: 'Aaron Jones', pos: 'RB', team: 'MIN', baseDynasty: 5200, baseRedraft: 7300, age: 29 },
+        { id: 'rb20', name: 'David Montgomery', pos: 'RB', team: 'DET', baseDynasty: 5700, baseRedraft: 7100, age: 27 },
+        { id: 'rb21', name: 'Jonathon Brooks', pos: 'RB', team: 'CAR', baseDynasty: 6600, baseRedraft: 5500, age: 21 },
+        { id: 'rb22', name: 'Trey Benson', pos: 'RB', team: 'ARI', baseDynasty: 6100, baseRedraft: 5200, age: 22 },
+        { id: 'rb23', name: 'Brian Robinson Jr.', pos: 'RB', team: 'WAS', baseDynasty: 5400, baseRedraft: 6400, age: 25 },
+        { id: 'rb24', name: 'Najee Harris', pos: 'RB', team: 'PIT', baseDynasty: 5200, baseRedraft: 6300, age: 26 },
+        { id: 'rb25', name: 'Tony Pollard', pos: 'RB', team: 'TEN', baseDynasty: 5100, baseRedraft: 6200, age: 27 },
+        { id: 'rb26', name: 'Raheem Mostert', pos: 'RB', team: 'MIA', baseDynasty: 3500, baseRedraft: 5800, age: 32 },
+        { id: 'rb27', name: 'Bucky Irving', pos: 'RB', team: 'TB', baseDynasty: 6300, baseRedraft: 6500, age: 22 },
+        { id: 'rb28', name: 'Rachaad White', pos: 'RB', team: 'TB', baseDynasty: 5000, baseRedraft: 6000, age: 25 },
+        { id: 'rb29', name: 'Jaylen Warren', pos: 'RB', team: 'PIT', baseDynasty: 4800, baseRedraft: 5400, age: 25 },
+        { id: 'rb30', name: 'J.K. Dobbins', pos: 'RB', team: 'LAC', baseDynasty: 4500, baseRedraft: 6100, age: 25 },
+        { id: 'rb31', name: 'Tyjae Spears', pos: 'RB', team: 'TEN', baseDynasty: 5100, baseRedraft: 5200, age: 23 },
+        { id: 'rb32', name: 'Blake Corum', pos: 'RB', team: 'LAR', baseDynasty: 4900, baseRedraft: 4300, age: 23 },
+        { id: 'rb33', name: 'Zamir White', pos: 'RB', team: 'LV', baseDynasty: 4100, baseRedraft: 5000, age: 24 },
+        { id: 'rb34', name: 'Nick Chubb', pos: 'RB', team: 'CLE', baseDynasty: 4400, baseRedraft: 5900, age: 28 },
+        { id: 'rb35', name: 'Austin Ekeler', pos: 'RB', team: 'WAS', baseDynasty: 3800, baseRedraft: 5300, age: 29 },
+        { id: 'rb36', name: 'Chuba Hubbard', pos: 'RB', team: 'CAR', baseDynasty: 4700, baseRedraft: 5800, age: 25 },
+        { id: 'rb37', name: 'Zach Charbonnet', pos: 'RB', team: 'SEA', baseDynasty: 4600, baseRedraft: 4500, age: 23 },
+        { id: 'rb38', name: 'Ray Davis', pos: 'RB', team: 'BUF', baseDynasty: 4200, baseRedraft: 4100, age: 24 },
+        { id: 'rb39', name: 'Tyler Allgeier', pos: 'RB', team: 'ATL', baseDynasty: 3900, baseRedraft: 4000, age: 24 },
+        { id: 'rb40', name: 'Jaleel McLaughlin', pos: 'RB', team: 'DEN', baseDynasty: 3600, baseRedraft: 3800, age: 24 },
+
+        // --- WIDE RECEIVERS (WR) ---
+        { id: 'wr1', name: 'Justin Jefferson', pos: 'WR', team: 'MIN', baseDynasty: 9900, baseRedraft: 9700, age: 25 },
+        { id: 'wr2', name: 'CeeDee Lamb', pos: 'WR', team: 'DAL', baseDynasty: 9800, baseRedraft: 9800, age: 25 },
+        { id: 'wr3', name: 'Ja\'Marr Chase', pos: 'WR', team: 'CIN', baseDynasty: 9750, baseRedraft: 9650, age: 24 },
+        { id: 'wr4', name: 'Amon-Ra St. Brown', pos: 'WR', team: 'DET', baseDynasty: 9400, baseRedraft: 9500, age: 24 },
+        { id: 'wr5', name: 'Marvin Harrison Jr.', pos: 'WR', team: 'ARI', baseDynasty: 9000, baseRedraft: 8300, age: 22 },
+        { id: 'wr6', name: 'A.J. Brown', pos: 'WR', team: 'PHI', baseDynasty: 8850, baseRedraft: 9300, age: 27 },
+        { id: 'wr7', name: 'Malik Nabers', pos: 'WR', team: 'NYG', baseDynasty: 8900, baseRedraft: 8400, age: 21 },
+        { id: 'wr8', name: 'Puka Nacua', pos: 'WR', team: 'LAR', baseDynasty: 8700, baseRedraft: 8800, age: 23 },
+        { id: 'wr9', name: 'Garrett Wilson', pos: 'WR', team: 'NYJ', baseDynasty: 8300, baseRedraft: 8500, age: 24 },
+        { id: 'wr10', name: 'Nico Collins', pos: 'WR', team: 'HOU', baseDynasty: 8400, baseRedraft: 8600, age: 25 },
+        { id: 'wr11', name: 'Drake London', pos: 'WR', team: 'ATL', baseDynasty: 8100, baseRedraft: 8200, age: 23 },
+        { id: 'wr12', name: 'Tyreek Hill', pos: 'WR', team: 'MIA', baseDynasty: 7600, baseRedraft: 9400, age: 30 },
+        { id: 'wr13', name: 'Rome Odunze', pos: 'WR', team: 'CHI', baseDynasty: 7800, baseRedraft: 6900, age: 22 },
+        { id: 'wr14', name: 'Chris Olave', pos: 'WR', team: 'NO', baseDynasty: 7700, baseRedraft: 7800, age: 24 },
+        { id: 'wr15', name: 'Brandon Aiyuk', pos: 'WR', team: 'SF', baseDynasty: 7600, baseRedraft: 8100, age: 26 },
+        { id: 'wr16', name: 'Jaylen Waddle', pos: 'WR', team: 'MIA', baseDynasty: 7500, baseRedraft: 7600, age: 25 },
+        { id: 'wr17', name: 'DeVonta Smith', pos: 'WR', team: 'PHI', baseDynasty: 7400, baseRedraft: 7700, age: 25 },
+        { id: 'wr18', name: 'DK Metcalf', pos: 'WR', team: 'SEA', baseDynasty: 7200, baseRedraft: 7900, age: 26 },
+        { id: 'wr19', name: 'Mike Evans', pos: 'WR', team: 'TB', baseDynasty: 6200, baseRedraft: 8300, age: 31 },
+        { id: 'wr20', name: 'Davante Adams', pos: 'WR', team: 'NYJ', baseDynasty: 6000, baseRedraft: 8200, age: 31 },
+        { id: 'wr21', name: 'Cooper Kupp', pos: 'WR', team: 'LAR', baseDynasty: 5800, baseRedraft: 8000, age: 31 },
+        { id: 'wr22', name: 'Deebo Samuel Sr.', pos: 'WR', team: 'SF', baseDynasty: 6300, baseRedraft: 7800, age: 28 },
+        { id: 'wr23', name: 'Ladd McConkey', pos: 'WR', team: 'LAC', baseDynasty: 7300, baseRedraft: 7100, age: 22 },
+        { id: 'wr24', name: 'Brian Thomas Jr.', pos: 'WR', team: 'JAX', baseDynasty: 7500, baseRedraft: 7200, age: 21 },
+        { id: 'wr25', name: 'Xavier Worthy', pos: 'WR', team: 'KC', baseDynasty: 7000, baseRedraft: 6600, age: 21 },
+        { id: 'wr26', name: 'Tee Higgins', pos: 'WR', team: 'CIN', baseDynasty: 6800, baseRedraft: 7400, age: 25 },
+        { id: 'wr27', name: 'George Pickens', pos: 'WR', team: 'PIT', baseDynasty: 6700, baseRedraft: 7200, age: 23 },
+        { id: 'wr28', name: 'Zay Flowers', pos: 'WR', team: 'BAL', baseDynasty: 6900, baseRedraft: 7100, age: 24 },
+        { id: 'wr29', name: 'Rashee Rice', pos: 'WR', team: 'KC', baseDynasty: 7100, baseRedraft: 7300, age: 24 },
+        { id: 'wr30', name: 'Michael Pittman Jr.', pos: 'WR', team: 'IND', baseDynasty: 6500, baseRedraft: 7300, age: 26 },
+        { id: 'wr31', name: 'Terry McLaurin', pos: 'WR', team: 'WAS', baseDynasty: 6100, baseRedraft: 7500, age: 29 },
+        { id: 'wr32', name: 'Calvin Ridley', pos: 'WR', team: 'TEN', baseDynasty: 5400, baseRedraft: 6800, age: 29 },
+        { id: 'wr33', name: 'Keenan Allen', pos: 'WR', team: 'CHI', baseDynasty: 4300, baseRedraft: 6700, age: 32 },
+        { id: 'wr34', name: 'Amari Cooper', pos: 'WR', team: 'BUF', baseDynasty: 5300, baseRedraft: 7000, age: 30 },
+        { id: 'wr35', name: 'Christian Kirk', pos: 'WR', team: 'JAX', baseDynasty: 5200, baseRedraft: 6300, age: 27 },
+        { id: 'wr36', name: 'Diontae Johnson', pos: 'WR', team: 'BAL', baseDynasty: 5000, baseRedraft: 6200, age: 28 },
+        { id: 'wr37', name: 'Jaxon Smith-Njigba', pos: 'WR', team: 'SEA', baseDynasty: 7200, baseRedraft: 7000, age: 22 },
+        { id: 'wr38', name: 'Jordan Addison', pos: 'WR', team: 'MIN', baseDynasty: 6600, baseRedraft: 6400, age: 22 },
+        { id: 'wr39', name: 'Jayden Reed', pos: 'WR', team: 'GB', baseDynasty: 6800, baseRedraft: 6900, age: 24 },
+        { id: 'wr40', name: 'Tank Dell', pos: 'WR', team: 'HOU', baseDynasty: 6400, baseRedraft: 6500, age: 24 },
+        { id: 'wr41', name: 'Keon Coleman', pos: 'WR', team: 'BUF', baseDynasty: 6200, baseRedraft: 5800, age: 21 },
+        { id: 'wr42', name: 'Adonai Mitchell', pos: 'WR', team: 'IND', baseDynasty: 5600, baseRedraft: 4900, age: 21 },
+        { id: 'wr43', name: 'Ricky Pearsall', pos: 'WR', team: 'SF', baseDynasty: 5500, baseRedraft: 4800, age: 24 },
+        { id: 'wr44', name: 'Xavier Legette', pos: 'WR', team: 'CAR', baseDynasty: 5400, baseRedraft: 4900, age: 23 },
+        { id: 'wr45', name: 'Jerry Jeudy', pos: 'WR', team: 'CLE', baseDynasty: 4800, baseRedraft: 5600, age: 25 },
+        { id: 'wr46', name: 'Courtland Sutton', pos: 'WR', team: 'DEN', baseDynasty: 4600, baseRedraft: 6100, age: 28 },
+        { id: 'wr47', name: 'Jakobi Meyers', pos: 'WR', team: 'LV', baseDynasty: 4400, baseRedraft: 5800, age: 27 },
+        { id: 'wr48', name: 'DeAndre Hopkins', pos: 'WR', team: 'KC', baseDynasty: 3900, baseRedraft: 6200, age: 32 },
+        { id: 'wr49', name: 'Khalil Shakir', pos: 'WR', team: 'BUF', baseDynasty: 5300, baseRedraft: 5800, age: 24 },
+        { id: 'wr50', name: 'Wan\'Dale Robinson', pos: 'WR', team: 'NYG', baseDynasty: 4700, baseRedraft: 5200, age: 23 },
+
+        // --- TIGHT ENDS (TE) ---
+        { id: 'te1', name: 'Brock Bowers', pos: 'TE', team: 'LV', baseDynasty: 9000, baseRedraft: 8500, age: 21 },
+        { id: 'te2', name: 'Sam LaPorta', pos: 'TE', team: 'DET', baseDynasty: 8700, baseRedraft: 8300, age: 23 },
+        { id: 'te3', name: 'Trey McBride', pos: 'TE', team: 'ARI', baseDynasty: 8500, baseRedraft: 8200, age: 24 },
+        { id: 'te4', name: 'Dalton Kincaid', pos: 'TE', team: 'BUF', baseDynasty: 7700, baseRedraft: 7400, age: 24 },
+        { id: 'te5', name: 'Kyle Pitts', pos: 'TE', team: 'ATL', baseDynasty: 7100, baseRedraft: 6900, age: 23 },
+        { id: 'te6', name: 'Mark Andrews', pos: 'TE', team: 'BAL', baseDynasty: 6900, baseRedraft: 7600, age: 29 },
+        { id: 'te7', name: 'George Kittle', pos: 'TE', team: 'SF', baseDynasty: 6800, baseRedraft: 8400, age: 31 },
+        { id: 'te8', name: 'Travis Kelce', pos: 'TE', team: 'KC', baseDynasty: 5600, baseRedraft: 8500, age: 35 },
+        { id: 'te9', name: 'Evan Engram', pos: 'TE', team: 'JAX', baseDynasty: 6200, baseRedraft: 7300, age: 30 },
+        { id: 'te10', name: 'David Njoku', pos: 'TE', team: 'CLE', baseDynasty: 6100, baseRedraft: 7100, age: 28 },
+        { id: 'te11', name: 'Jake Ferguson', pos: 'TE', team: 'DAL', baseDynasty: 6400, baseRedraft: 6800, age: 25 },
+        { id: 'te12', name: 'Dallas Goedert', pos: 'TE', team: 'PHI', baseDynasty: 5400, baseRedraft: 6600, age: 29 },
+        { id: 'te13', name: 'Cole Kmet', pos: 'TE', team: 'CHI', baseDynasty: 5200, baseRedraft: 5900, age: 25 },
+        { id: 'te14', name: 'T.J. Hockenson', pos: 'TE', team: 'MIN', baseDynasty: 6500, baseRedraft: 6400, age: 27 },
+        { id: 'te15', name: 'Ben Sinnott', pos: 'TE', team: 'WAS', baseDynasty: 5300, baseRedraft: 4100, age: 22 },
+        { id: 'te16', name: 'Pat Freiermuth', pos: 'TE', team: 'PIT', baseDynasty: 4800, baseRedraft: 5300, age: 25 },
+        { id: 'te17', name: 'Isaiah Likely', pos: 'TE', team: 'BAL', baseDynasty: 5400, baseRedraft: 5100, age: 24 },
+        { id: 'te18', name: 'Luke Musgrave', pos: 'TE', team: 'GB', baseDynasty: 4500, baseRedraft: 4400, age: 24 },
+        { id: 'te19', name: 'Hunter Henry', pos: 'TE', team: 'NE', baseDynasty: 3800, baseRedraft: 4900, age: 29 },
+        { id: 'te20', name: 'Jonnu Smith', pos: 'TE', team: 'MIA', baseDynasty: 3700, baseRedraft: 4800, age: 29 },
+
+        // --- KICKERS & DST ---
+        { id: 'k1', name: 'Brandon Aubrey', pos: 'K', team: 'DAL', baseDynasty: 1800, baseRedraft: 2000, age: 29 },
+        { id: 'k2', name: 'Justin Tucker', pos: 'K', team: 'BAL', baseDynasty: 1400, baseRedraft: 1700, age: 34 },
+        { id: 'k3', name: 'Harrison Butker', pos: 'K', team: 'KC', baseDynasty: 1500, baseRedraft: 1800, age: 29 },
+        { id: 'k4', name: 'Evan McPherson', pos: 'K', team: 'CIN', baseDynasty: 1400, baseRedraft: 1600, age: 25 },
+        { id: 'k5', name: 'Jake Elliott', pos: 'K', team: 'PHI', baseDynasty: 1300, baseRedraft: 1600, age: 29 },
+        { id: 'dst1', name: 'San Francisco 49ers', pos: 'DST', team: 'SF', baseDynasty: 1400, baseRedraft: 1800, age: 0 },
+        { id: 'dst2', name: 'Baltimore Ravens', pos: 'DST', team: 'BAL', baseDynasty: 1400, baseRedraft: 1800, age: 0 },
+        { id: 'dst3', name: 'Dallas Cowboys', pos: 'DST', team: 'DAL', baseDynasty: 1300, baseRedraft: 1700, age: 0 },
+        { id: 'dst4', name: 'Cleveland Browns', pos: 'DST', team: 'CLE', baseDynasty: 1300, baseRedraft: 1700, age: 0 },
+        { id: 'dst5', name: 'New York Jets', pos: 'DST', team: 'NYJ', baseDynasty: 1300, baseRedraft: 1600, age: 0 }
+    ];
+
+    const DRAFT_PICKS_DATABASE = [
+        // --- 2025 PICKS ---
+        { id: 'pk_2025_1_e', name: '2025 Early 1st Round Pick (1.01-1.04)', pos: 'PICK', baseDynasty: 8000, baseRedraft: 0 },
+        { id: 'pk_2025_1_m', name: '2025 Mid 1st Round Pick (1.05-1.08)', pos: 'PICK', baseDynasty: 6800, baseRedraft: 0 },
+        { id: 'pk_2025_1_l', name: '2025 Late 1st Round Pick (1.09-1.12)', pos: 'PICK', baseDynasty: 5600, baseRedraft: 0 },
+        { id: 'pk_2025_2_e', name: '2025 Early 2nd Round Pick', pos: 'PICK', baseDynasty: 3900, baseRedraft: 0 },
+        { id: 'pk_2025_2_m', name: '2025 Mid 2nd Round Pick', pos: 'PICK', baseDynasty: 3300, baseRedraft: 0 },
+        { id: 'pk_2025_2_l', name: '2025 Late 2nd Round Pick', pos: 'PICK', baseDynasty: 2700, baseRedraft: 0 },
+        { id: 'pk_2025_3',   name: '2025 3rd Round Pick', pos: 'PICK', baseDynasty: 1700, baseRedraft: 0 },
+        { id: 'pk_2025_4',   name: '2025 4th Round Pick', pos: 'PICK', baseDynasty: 900, baseRedraft: 0 },
+
+        // --- 2026 PICKS ---
+        { id: 'pk_2026_1_e', name: '2026 Early 1st Round Pick', pos: 'PICK', baseDynasty: 7500, baseRedraft: 0 },
+        { id: 'pk_2026_1_m', name: '2026 Mid 1st Round Pick', pos: 'PICK', baseDynasty: 6400, baseRedraft: 0 },
+        { id: 'pk_2026_1_l', name: '2026 Late 1st Round Pick', pos: 'PICK', baseDynasty: 5200, baseRedraft: 0 },
+        { id: 'pk_2026_2',   name: '2026 2nd Round Pick', pos: 'PICK', baseDynasty: 3200, baseRedraft: 0 },
+        { id: 'pk_2026_3',   name: '2026 3rd Round Pick', pos: 'PICK', baseDynasty: 1500, baseRedraft: 0 },
+
+        // --- 2027 PICKS ---
+        { id: 'pk_2027_1', name: '2027 1st Round Pick (Future)', pos: 'PICK', baseDynasty: 6000, baseRedraft: 0 },
+        { id: 'pk_2027_2', name: '2027 2nd Round Pick (Future)', pos: 'PICK', baseDynasty: 2900, baseRedraft: 0 },
+        { id: 'pk_2027_3', name: '2027 3rd Round Pick (Future)', pos: 'PICK', baseDynasty: 1300, baseRedraft: 0 }
+    ];
+
+    /* ==========================================================================
+       GLOBAL STATE & INTERACTIVE CONTROLLERS
+       ========================================================================== */
+    let activeSide = 'A';
+    let currentModalTab = 'players';
+    let currentPosFilter = 'ALL';
+
+    let tradeState = {
+        teamA: [],
+        teamB: [],
+        settings: {
+            format: 'dynasty',
+            qbFormat: 'superflex',
+            scoring: 'ppr',
+            teams: 12,
+            studPremium: 'high'
+        }
+    };
+
+    let chartInstance = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+        lucide.createIcons();
+        loadSettingsFromStorage();
+        initChart();
+        renderModalPlayers();
+        renderModalPicks();
+        loadTradeHistoryFromStorage();
+        loadPresetTrade('blockbuster');
+    });
+
+    function openSearchModal(side) {
+        activeSide = side;
+        const tag = document.getElementById('modal-side-tag');
+        tag.innerText = `SIDE ${side}`;
+        tag.className = side === 'A' 
+            ? 'text-xs font-extrabold uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400' 
+            : 'text-xs font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400';
+
+        const modal = document.getElementById('search-modal');
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        document.getElementById('player-search-input').value = '';
+        filterPlayers();
+        document.getElementById('player-search-input').focus();
+    }
+
+    function closeSearchModal() {
+        const modal = document.getElementById('search-modal');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    function switchModalTab(tab) {
+        currentModalTab = tab;
+        const tabs = ['players', 'picks', 'custom'];
+        tabs.forEach(t => {
+            const btn = document.getElementById(`tab-${t}-btn`);
+            const content = document.getElementById(`modal-tab-${t}`);
+            if (t === tab) {
+                btn.className = 'flex-1 py-3 px-4 text-cyan-400 border-b-2 border-cyan-400 transition-colors flex items-center justify-center gap-1.5 font-semibold';
+                content.classList.remove('hidden');
+            } else {
+                btn.className = 'flex-1 py-3 px-4 text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center gap-1.5 font-semibold';
+                content.classList.add('hidden');
+            }
+        });
+    }
+
+    function setPosFilter(pos) {
+        currentPosFilter = pos;
+        document.querySelectorAll('.pos-filter-btn').forEach(btn => {
+            if (btn.dataset.pos === pos) {
+                btn.className = 'pos-filter-btn px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-bold';
+            } else {
+                btn.className = 'pos-filter-btn px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium hover:bg-slate-700';
+            }
+        });
+        filterPlayers();
+    }
+
+    function filterPlayers() {
+        const query = document.getElementById('player-search-input').value.toLowerCase().trim();
+        renderModalPlayers(query, currentPosFilter);
+    }
+
+    function renderModalPlayers(query = '', posFilter = 'ALL') {
+        const list = document.getElementById('modal-player-list');
+        const filtered = PLAYERS_DATABASE.filter(p => {
+            const matchesQuery = p.name.toLowerCase().includes(query) || (p.team && p.team.toLowerCase().includes(query));
+            const matchesPos = posFilter === 'ALL' || p.pos === posFilter;
+            return matchesQuery && matchesPos;
+        });
+
+        if (filtered.length === 0) {
+            list.innerHTML = `<div class="p-4 text-center text-slate-500 text-xs">No matching players found</div>`;
+            return;
+        }
+
+        list.innerHTML = filtered.map(player => {
+            const val = calculateAssetValue(player);
+            return `
+                <div onclick="selectAsset('${player.id}', 'player')" class="p-2.5 rounded-xl hover:bg-slate-800/80 cursor-pointer flex items-center justify-between group transition-colors">
+                    <div class="flex items-center gap-3">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black tracking-wider ${getPosBadgeClass(player.pos)}">${player.pos}</span>
+                        <div>
+                            <div class="text-sm font-semibold text-slate-100 group-hover:text-cyan-300 transition-colors">${player.name}</div>
+                            <div class="text-[11px] text-slate-400">${player.team || 'FA'} • Age ${player.age || 'N/A'}</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs font-mono font-bold text-slate-200">${val.toLocaleString()}</div>
+                        <div class="text-[10px] text-slate-500">Value</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderModalPicks() {
+        const grid = document.getElementById('modal-picks-grid');
+        grid.innerHTML = DRAFT_PICKS_DATABASE.map(pick => {
+            const val = calculateAssetValue(pick);
+            return `
+                <div onclick="selectAsset('${pick.id}', 'pick')" class="p-3 bg-slate-900 border border-slate-800 hover:border-cyan-500/50 rounded-xl cursor-pointer flex flex-col justify-between group transition-all">
+                    <span class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Draft Pick</span>
+                    <div class="text-xs font-bold text-slate-200 group-hover:text-cyan-300 transition-colors my-1">${pick.name}</div>
+                    <div class="text-right font-mono text-xs font-semibold text-slate-300">${val.toLocaleString()} pts</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function selectAsset(id, type) {
+        const source = type === 'player' ? PLAYERS_DATABASE : DRAFT_PICKS_DATABASE;
+        const item = source.find(x => x.id === id);
+        if (!item) return;
+
+        const assetCopy = { ...item, instanceId: `${item.id}_${Date.now()}` };
+        if (activeSide === 'A') {
+            tradeState.teamA.push(assetCopy);
+        } else {
+            tradeState.teamB.push(assetCopy);
+        }
+
+        closeSearchModal();
+        recalculateAndRender();
+        showToast(`Added ${item.name} to Side ${activeSide}`);
+    }
+
+    function addCustomAsset() {
+        const name = document.getElementById('custom-name').value.trim() || 'Custom Asset';
+        const pos = document.getElementById('custom-pos').value;
+        const team = document.getElementById('custom-team').value.trim().toUpperCase() || 'FA';
+        const val = parseInt(document.getElementById('custom-value').value) || 3000;
+
+        const customObj = {
+            id: `custom_${Date.now()}`,
+            instanceId: `custom_${Date.now()}`,
+            name,
+            pos,
+            team,
+            baseDynasty: val,
+            baseRedraft: val,
+            age: 25
+        };
+
+        if (activeSide === 'A') {
+            tradeState.teamA.push(customObj);
+        } else {
+            tradeState.teamB.push(customObj);
+        }
+
+        closeSearchModal();
+        recalculateAndRender();
+        showToast(`Added custom asset ${name} to Side ${activeSide}`);
+    }
+
+    function removeAsset(side, instanceId) {
+        if (side === 'A') {
+            tradeState.teamA = tradeState.teamA.filter(a => a.instanceId !== instanceId);
+        } else {
+            tradeState.teamB = tradeState.teamB.filter(b => b.instanceId !== instanceId);
+        }
+        recalculateAndRender();
+    }
+
+    function renderAssetList(side, assets) {
+        const container = document.getElementById(side === 'A' ? 'team-a-assets' : 'team-b-assets');
+        if (assets.length === 0) {
+            container.innerHTML = `
+                <div class="h-32 flex flex-col items-center justify-center text-slate-500 border border-slate-800/60 rounded-xl bg-slate-900/30">
+                    <i data-lucide="user-plus" class="w-8 h-8 mb-2 stroke-[1.5] opacity-50"></i>
+                    <span class="text-xs">No assets added to Side ${side} yet</span>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = assets.map(asset => {
+            const val = calculateAssetValue(asset);
+            return `
+                <div class="glass-card p-3 rounded-xl border border-slate-800/80 flex items-center justify-between group hover:border-slate-700 transition-all">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black tracking-wider ${getPosBadgeClass(asset.pos)}">${asset.pos}</span>
+                        <div class="truncate">
+                            <h4 class="text-xs font-bold text-slate-100 truncate">${asset.name}</h4>
+                            <p class="text-[10px] text-slate-400">${asset.team || 'FA'} ${asset.age ? `• ${asset.age} yrs` : ''}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <span class="font-mono text-xs font-bold text-slate-200">${val.toLocaleString()}</span>
+                        <button onclick="removeAsset('${side}', '${asset.instanceId}')" class="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function getPosBadgeClass(pos) {
+        switch(pos) {
+            case 'QB': return 'bg-purple-500/20 text-purple-300 border border-purple-500/30';
+            case 'RB': return 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+            case 'WR': return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+            case 'TE': return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+            case 'PICK': return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
+            default: return 'bg-slate-700 text-slate-300';
+        }
+    }
+
+    function updateSettings() {
+        tradeState.settings.format = document.getElementById('setting-format').value;
+        tradeState.settings.qbFormat = document.getElementById('setting-qb-format').value;
+        tradeState.settings.scoring = document.getElementById('setting-scoring').value;
+        tradeState.settings.teams = parseInt(document.getElementById('setting-teams').value);
+        tradeState.settings.studPremium = document.getElementById('setting-stud-premium').value;
+
+        recalculateAndRender();
+    }
+
+    function saveLeagueSettings() {
+        localStorage.setItem('gridiron_league_settings', JSON.stringify(tradeState.settings));
+        showToast('Default league settings saved!');
+    }
+
+    function loadSettingsFromStorage() {
+        try {
+            const saved = localStorage.getItem('gridiron_league_settings');
+            if (saved) {
+                tradeState.settings = JSON.parse(saved);
+                document.getElementById('setting-format').value = tradeState.settings.format || 'dynasty';
+                document.getElementById('setting-qb-format').value = tradeState.settings.qbFormat || 'superflex';
+                document.getElementById('setting-scoring').value = tradeState.settings.scoring || 'ppr';
+                document.getElementById('setting-teams').value = tradeState.settings.teams || 12;
+                document.getElementById('setting-stud-premium').value = tradeState.settings.studPremium || 'high';
+            }
+        } catch(e){}
+    }
+
+    function updateTradeVerdict(totalA, totalB) {
+        const needle = document.getElementById('fairness-needle');
+        const badge = document.getElementById('verdict-badge');
+        const deltaEl = document.getElementById('verdict-delta');
+        const analysisEl = document.getElementById('analysis-text');
+        const warningBox = document.getElementById('consolidation-warning');
+
+        if (totalA === 0 && totalB === 0) {
+            needle.style.left = '50%';
+            badge.innerText = 'EVEN TRADE';
+            badge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-slate-800 text-slate-400 border border-slate-700 uppercase';
+            deltaEl.innerText = 'Difference: 0 pts (0%)';
+            analysisEl.innerText = 'Add players or picks to both sides of the trade to generate a full analysis.';
+            warningBox.classList.add('hidden');
+            return;
+        }
+
+        const maxVal = Math.max(totalA, totalB, 1);
+        const diff = Math.abs(totalA - totalB);
+        const pctDiff = Math.round((diff / maxVal) * 100);
+
+        let positionPct = 50;
+        if (totalA > totalB) {
+            positionPct = 50 - Math.min(40, (pctDiff / 30) * 40);
+        } else if (totalB > totalA) {
+            positionPct = 50 + Math.min(40, (pctDiff / 30) * 40);
+        }
+        needle.style.left = `${positionPct}%`;
+
+        deltaEl.innerText = `Difference: ${diff.toLocaleString()} pts (${pctDiff}%)`;
+
+        const countDiff = Math.abs(tradeState.teamA.length - tradeState.teamB.length);
+        if (countDiff >= 1 && tradeState.teamA.length > 0 && tradeState.teamB.length > 0) {
+            warningBox.classList.remove('hidden');
+            const largerSide = tradeState.teamA.length > tradeState.teamB.length ? 'Side B' : 'Side A';
+            document.getElementById('consolidation-text').innerText = `${countDiff}-player consolidation trade: ${largerSide} receives quality, but will require roster cuts.`;
+        } else {
+            warningBox.classList.add('hidden');
+        }
+
+        if (pctDiff <= 4) {
+            badge.innerText = 'EVEN TRADE';
+            badge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase';
+            analysisEl.innerText = `Extremely balanced trade! Both teams exchange nearly equal market value given current ${tradeState.settings.format.toUpperCase()} settings.`;
+        } else if (pctDiff <= 12) {
+            const winner = totalA > totalB ? 'Side A' : 'Side B';
+            badge.innerText = `FAVORS ${winner} (FAIR)`;
+            badge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 uppercase';
+            analysisEl.innerText = `Slight edge to ${winner} (+${diff.toLocaleString()} pts), but well within the acceptable negotiation range for most leagues.`;
+        } else if (pctDiff <= 25) {
+            const winner = totalA > totalB ? 'Side A' : 'Side B';
+            badge.innerText = `FAVORS ${winner}`;
+            badge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-amber-500/20 text-amber-400 border border-amber-500/40 uppercase';
+            analysisEl.innerText = `Noticeable value gap favoring ${winner}. The other side should request an additional 2nd round draft pick or bench asset to balance the offer.`;
+        } else {
+            const winner = totalA > totalB ? 'Side A' : 'Side B';
+            badge.innerText = `LOPSIDED FOR ${winner}`;
+            badge.className = 'px-3 py-1 rounded-full text-xs font-black tracking-wide bg-rose-500/20 text-rose-400 border border-rose-500/40 uppercase';
+            analysisEl.innerText = `Heavy value discrepancy favoring ${winner} (+${pctDiff}%). This trade strongly tilts total starter power and dynasty equity.`;
+        }
+    }
+
+    function initChart() {
+        const ctx = document.getElementById('positionChart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['QB', 'RB', 'WR', 'TE', 'PICKS'],
+                datasets: [{
+                    data: [0, 0, 0, 0, 0],
+                    backgroundColor: ['#a855f7', '#06b6d4', '#10b981', '#f59e0b', '#3b82f6'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#94a3b8', font: { size: 10, family: 'Inter' }, boxWidth: 10 }
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+    }
+
+    function updatePositionalChart() {
+        if (!chartInstance) return;
+
+        const allAssets = [...tradeState.teamA, ...tradeState.teamB];
+        const counts = { QB: 0, RB: 0, WR: 0, TE: 0, PICK: 0 };
+
+        allAssets.forEach(a => {
+            const val = calculateAssetValue(a);
+            if (counts[a.pos] !== undefined) counts[a.pos] += val;
+            else counts['PICK'] += val;
+        });
+
+        const total = Object.values(counts).reduce((a, b) => a + b, 0);
+        if (total === 0) {
+            chartInstance.data.datasets[0].data = [1, 1, 1, 1, 1];
+        } else {
+            chartInstance.data.datasets[0].data = [
+                counts.QB, counts.RB, counts.WR, counts.TE, counts.PICK
+            ];
+        }
+        chartInstance.update();
+    }
+
+    function calculateAssetValue(asset) {
+        let base = (tradeState.settings.format === 'redraft') ? asset.baseRedraft : asset.baseDynasty;
+        if (base === undefined || base === 0) {
+            if (asset.pos === 'PICK' && tradeState.settings.format === 'redraft') return 50;
+            base = asset.baseDynasty || 2000;
+        }
+
+        let multiplier = 1.0;
+
+        if (asset.pos === 'QB') {
+            multiplier *= (tradeState.settings.qbFormat === 'superflex') ? 1.45 : 0.85;
+        }
+
+        if (asset.pos === 'WR' || asset.pos === 'TE') {
+            if (tradeState.settings.scoring === 'ppr') multiplier *= 1.05;
+            if (tradeState.settings.scoring === 'standard') multiplier *= 0.90;
+        }
+        if (asset.pos === 'TE' && tradeState.settings.scoring === 'te_premium') {
+            multiplier *= 1.25;
+        }
+        if (asset.pos === 'RB' && tradeState.settings.scoring === 'standard') {
+            multiplier *= 1.10;
+        }
+
+        const teamScale = (parseInt(tradeState.settings.teams) / 12);
+        multiplier *= Math.pow(teamScale, 0.2);
+
+        return Math.round(base * multiplier);
+    }
+
+    function calculateSideTotal(assets) {
+        if (!assets || assets.length === 0) return 0;
+
+        const values = assets.map(a => calculateAssetValue(a)).sort((a, b) => b - a);
+
+        let total = 0;
+        const studPremiumSetting = tradeState.settings.studPremium;
+        const premiumFactor = studPremiumSetting === 'high' ? 0.82 : (studPremiumSetting === 'normal' ? 0.90 : 1.0);
+
+        values.forEach((val, idx) => {
+            const weight = Math.pow(premiumFactor, idx);
+            total += val * weight;
+        });
+
+        return Math.round(total);
+    }
+
+    function recalculateAndRender() {
+        const totalA = calculateSideTotal(tradeState.teamA);
+        const totalB = calculateSideTotal(tradeState.teamB);
+
+        document.getElementById('team-a-total-val').innerText = totalA.toLocaleString();
+        document.getElementById('team-b-total-val').innerText = totalB.toLocaleString();
+
+        document.getElementById('team-a-count').innerText = tradeState.teamA.length;
+        document.getElementById('team-b-count').innerText = tradeState.teamB.length;
+
+        renderAssetList('A', tradeState.teamA);
+        renderAssetList('B', tradeState.teamB);
+
+        const avgAgeA = calculateAverageAge(tradeState.teamA);
+        const avgAgeB = calculateAverageAge(tradeState.teamB);
+
+        document.getElementById('team-a-avg-age').innerText = `Avg Age: ${avgAgeA}`;
+        document.getElementById('team-b-avg-age').innerText = `Avg Age: ${avgAgeB}`;
+
+        document.getElementById('summary-a-age').innerText = avgAgeA !== '-' ? `${avgAgeA} yrs` : '-';
+        document.getElementById('summary-b-age').innerText = avgAgeB !== '-' ? `${avgAgeB} yrs` : '-';
+
+        const eliteYears = calculateProjectedEliteYears(tradeState.teamA, tradeState.teamB);
+        document.getElementById('summary-elite-years').innerText = eliteYears;
+
+        const topA = [...tradeState.teamA].sort((a, b) => calculateAssetValue(b) - calculateAssetValue(a))[0];
+        const topB = [...tradeState.teamB].sort((a, b) => calculateAssetValue(b) - calculateAssetValue(a))[0];
+        document.getElementById('team-a-top-asset').innerText = topA ? `Top: ${topA.name}` : 'Top: -';
+        document.getElementById('team-b-top-asset').innerText = topB ? `Top: ${topB.name}` : 'Top: -';
+
+        document.getElementById('summary-format-boost').innerText = `${tradeState.settings.format.toUpperCase()} (${tradeState.settings.qbFormat === 'superflex' ? 'SF' : '1QB'})`;
+
+        updateTradeVerdict(totalA, totalB);
+        updatePositionalChart();
+        lucide.createIcons();
+    }
+
+    function calculateAverageAge(assets) {
+        const playersWithAge = assets.filter(a => typeof a.age === 'number' && a.age > 0);
+        if (playersWithAge.length === 0) return '-';
+        const sum = playersWithAge.reduce((acc, p) => acc + p.age, 0);
+        return (sum / playersWithAge.length).toFixed(1);
+    }
+
+    function calculateProjectedEliteYears(teamA, teamB) {
+        if (teamA.length === 0 && teamB.length === 0) return '-';
+
+        const calcSideYears = (team) => {
+            return team.reduce((acc, a) => {
+                if (a.pos === 'PICK') return acc + 5;
+                if (typeof a.age !== 'number' || a.age === 0) return acc + 3;
+                
+                let primeLimit = 29;
+                if (a.pos === 'RB') primeLimit = 26;
+                if (a.pos === 'WR') primeLimit = 30;
+                if (a.pos === 'QB') primeLimit = 35;
+                if (a.pos === 'TE') primeLimit = 31;
+
+                const remaining = Math.max(0, primeLimit - a.age + 1);
+                return acc + remaining;
+            }, 0);
+        };
+
+        const yearsA = calcSideYears(teamA);
+        const yearsB = calcSideYears(teamB);
+
+        if (yearsA > yearsB) {
+            return `Side A (+${(yearsA - yearsB).toFixed(1)} prime yrs)`;
+        } else if (yearsB > yearsA) {
+            return `Side B (+${(yearsB - yearsA).toFixed(1)} prime yrs)`;
+        } else {
+            return 'Equal Longevity Window';
+        }
+    }
+
+    function loadPresetTrade(presetKey) {
+        tradeState.teamA = [];
+        tradeState.teamB = [];
+
+        if (presetKey === 'blockbuster') {
+            const jj = PLAYERS_DATABASE.find(p => p.id === 'wr1');
+            const gibbs = PLAYERS_DATABASE.find(p => p.id === 'rb3');
+            const pick = DRAFT_PICKS_DATABASE.find(p => p.id === 'pk_2025_1_m');
+            if (jj) tradeState.teamA.push({ ...jj, instanceId: `preset_${Date.now()}_1` });
+            if (gibbs) tradeState.teamB.push({ ...gibbs, instanceId: `preset_${Date.now()}_2` });
+            if (pick) tradeState.teamB.push({ ...pick, instanceId: `preset_${Date.now()}_3` });
+        } else if (presetKey === 'dynasty_rebuild') {
+            const henry = PLAYERS_DATABASE.find(p => p.id === 'rb10');
+            const pick1 = DRAFT_PICKS_DATABASE.find(p => p.id === 'pk_2025_1_e');
+            const pick2 = DRAFT_PICKS_DATABASE.find(p => p.id === 'pk_2025_2_m');
+            if (henry) tradeState.teamA.push({ ...henry, instanceId: `preset_${Date.now()}_1` });
+            if (pick1) tradeState.teamB.push({ ...pick1, instanceId: `preset_${Date.now()}_2` });
+            if (pick2) tradeState.teamB.push({ ...pick2, instanceId: `preset_${Date.now()}_3` });
+        } else if (presetKey === 'superflex_qb') {
+            const allen = PLAYERS_DATABASE.find(p => p.id === 'qb1');
+            const ceedee = PLAYERS_DATABASE.find(p => p.id === 'wr2');
+            const purdy = PLAYERS_DATABASE.find(p => p.id === 'qb9');
+            if (allen) tradeState.teamA.push({ ...allen, instanceId: `preset_${Date.now()}_1` });
+            if (ceedee) tradeState.teamB.push({ ...ceedee, instanceId: `preset_${Date.now()}_2` });
+            if (purdy) tradeState.teamB.push({ ...purdy, instanceId: `preset_${Date.now()}_3` });
+        } else if (presetKey === 'tight_end_premium') {
+            const bowers = PLAYERS_DATABASE.find(p => p.id === 'te1');
+            const andrews = PLAYERS_DATABASE.find(p => p.id === 'te6');
+            const pick = DRAFT_PICKS_DATABASE.find(p => p.id === 'pk_2025_2_e');
+            if (bowers) tradeState.teamA.push({ ...bowers, instanceId: `preset_${Date.now()}_1` });
+            if (andrews) tradeState.teamB.push({ ...andrews, instanceId: `preset_${Date.now()}_2` });
+            if (pick) tradeState.teamB.push({ ...pick, instanceId: `preset_${Date.now()}_3` });
+        } else if (presetKey === 'rookie_fever') {
+            const mhj = PLAYERS_DATABASE.find(p => p.id === 'wr5');
+            const pick1 = DRAFT_PICKS_DATABASE.find(p => p.id === 'pk_2025_1_e');
+            const pick2 = DRAFT_PICKS_DATABASE.find(p => p.id === 'pk_2026_1_m');
+            if (mhj) tradeState.teamA.push({ ...mhj, instanceId: `preset_${Date.now()}_1` });
+            if (pick1) tradeState.teamB.push({ ...pick1, instanceId: `preset_${Date.now()}_2` });
+            if (pick2) tradeState.teamB.push({ ...pick2, instanceId: `preset_${Date.now()}_3` });
+        }
+
+        recalculateAndRender();
+        showToast('Loaded preset trade successfully');
+    }
+
+    function resetTrade() {
+        tradeState.teamA = [];
+        tradeState.teamB = [];
+        document.getElementById('preset-selector').value = "";
+        recalculateAndRender();
+        showToast('Trade editor cleared');
+    }
+
+    function copyTradeMarkdown() {
+        const valA = calculateSideTotal(tradeState.teamA);
+        const valB = calculateSideTotal(tradeState.teamB);
+        const badge = document.getElementById('verdict-badge').innerText;
+
+        const namesA = tradeState.teamA.map(a => a.name).join(', ') || 'Nothing';
+        const namesB = tradeState.teamB.map(b => b.name).join(', ') || 'Nothing';
+
+        const summaryText = 
+`🏈 **FANTASY FOOTBALL TRADE ANALYSIS** 🏈
+----------------------------------------
+**Team A Gives:** ${namesA} (${valA.toLocaleString()} pts)
+**Team B Gives:** ${namesB} (${valB.toLocaleString()} pts)
+----------------------------------------
+**Verdict:** ${badge}
+**Settings:** ${tradeState.settings.teams}-Team ${tradeState.settings.format.toUpperCase()} (${tradeState.settings.qbFormat === 'superflex' ? 'SF' : '1QB'})
+*Analyzed via Gridiron Pulse*`;
+
+        navigator.clipboard.writeText(summaryText).then(() => {
+            showToast('Trade summary copied to clipboard!');
+        }).catch(() => {
+            const dummy = document.createElement('textarea');
+            document.body.appendChild(dummy);
+            dummy.value = summaryText;
+            dummy.select();
+            document.execCommand('copy');
+            document.body.removeChild(dummy);
+            showToast('Trade summary copied to clipboard!');
+        });
+    }
+
+    function saveTradeHistory() {
+        if (tradeState.teamA.length === 0 && tradeState.teamB.length === 0) {
+            showToast('Cannot save an empty trade', 'error');
+            return;
+        }
+
+        let history = [];
+        try {
+            history = JSON.parse(localStorage.getItem('gridiron_trade_history') || '[]');
+        } catch(e){}
+
+        const item = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleDateString(),
+            teamA: tradeState.teamA.map(a => a.name).join(', '),
+            teamB: tradeState.teamB.map(b => b.name).join(', '),
+            valA: calculateSideTotal(tradeState.teamA),
+            valB: calculateSideTotal(tradeState.teamB),
+            verdict: document.getElementById('verdict-badge').innerText
+        };
+
+        history.unshift(item);
+        if (history.length > 10) history.pop();
+
+        localStorage.setItem('gridiron_trade_history', JSON.stringify(history));
+        loadTradeHistoryFromStorage();
+        showToast('Saved trade to history!');
+    }
+
+    function loadTradeHistoryFromStorage() {
+        const listContainer = document.getElementById('trade-history-list');
+        let history = [];
+        try {
+            history = JSON.parse(localStorage.getItem('gridiron_trade_history') || '[]');
+        } catch(e){}
+
+        if (history.length === 0) {
+            listContainer.innerHTML = `<div class="text-xs text-slate-500 italic col-span-full py-2 text-center">No saved trades in local storage yet.</div>`;
+            return;
+        }
+
+        listContainer.innerHTML = history.map(item => `
+            <div class="glass-card p-3 rounded-xl border border-slate-800 text-xs space-y-1.5">
+                <div class="flex justify-between items-center text-slate-400 text-[10px]">
+                    <span>${item.timestamp}</span>
+                    <span class="font-bold text-cyan-400">${item.verdict}</span>
+                </div>
+                <div class="text-slate-200">
+                    <strong class="text-cyan-400">A:</strong> ${item.teamA || 'None'}
+                </div>
+                <div class="text-slate-200">
+                    <strong class="text-emerald-400">B:</strong> ${item.teamB || 'None'}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function clearTradeHistory() {
+        localStorage.removeItem('gridiron_trade_history');
+        loadTradeHistoryFromStorage();
+        showToast('History cleared');
+    }
+
+    function showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        const msgEl = document.getElementById('toast-message');
+        const iconEl = document.getElementById('toast-icon');
+
+        msgEl.innerText = message;
+        if (type === 'error') {
+            iconEl.setAttribute('data-lucide', 'alert-circle');
+            iconEl.className = 'w-5 h-5 text-rose-400';
+        } else {
+            iconEl.setAttribute('data-lucide', 'check-circle');
+            iconEl.className = 'w-5 h-5 text-emerald-400';
+        }
+        lucide.createIcons();
+
+        toast.classList.remove('translate-y-20', 'opacity-0');
+
+        setTimeout(() => {
+            toast.classList.add('translate-y-20', 'opacity-0');
+        }, 3000);
+    }
+</script>
+</body>
+</html>
